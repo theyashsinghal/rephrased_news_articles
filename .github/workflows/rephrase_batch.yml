@@ -34,6 +34,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          export CMAKE_ARGS="-DLLAMA_AVX=OFF -DLLAMA_AVX2=OFF -DLLAMA_FMA=OFF"
+          pip install --no-cache-dir "llama-cpp-python>=0.2.90"
           pip install -r requirements.txt
 
       - name: Download Gemma Model
