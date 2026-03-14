@@ -91,15 +91,28 @@ def load_llm():
 
 def rephrase_article(llm, content):
     prompt = f"""
-- System: You are an expert news editor.
-- Instruction: Rephrase and summarize the following news article in strictly under 100 words. Maintain a professional, objective tone. Do not add any introductory or concluding remarks.
-- Article: {content}
-- Rephrased Summary:
+<start_of_turn>user
+You are a Senior News Editor. Your task is to rephrase the provided article into a high-quality, mobile-friendly News Card.
+
+### RULES:
+1. **Language:** Use very simple, clear language (Grade 8 level).
+2. **Structure:** Use the EXACT format below:
+   - ## [Catchy Short Title]
+   - **The Big Picture:** [1-sentence high-level summary]
+   - **Key Facts:** * [Fact 1]
+     * [Fact 2]
+     * [Fact 3]
+3. **Constraint:** Total word count must be under 100-150 words.
+4. **Tone:** Professional and objective. No "fluff" or "intro/outro" text.
+
+Article: {content}
+<end_of_turn>
+<start_of_turn>model
 """
     
     response = llm(
         prompt,
-        max_tokens=150, 
+        max_tokens=230, 
         stop=["\n\n", "- Article:"], 
         temperature=0.3,
         echo=False
