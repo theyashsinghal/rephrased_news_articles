@@ -18,7 +18,7 @@ DEST_WORKSHEET_NAME = 'Sheet1'
 
 MODEL_PATH = "./models/gemma-2b-it-q4_k_m.gguf"
 MAX_ARTICLES_TO_PROCESS = 1
-MAX_RUNTIME_SECONDS = 5.5 * 3600  # 5.5 hours to prevent GitHub Actions timeout
+MAX_RUNTIME_SECONDS = 5 * 3600  # 5.5 hours to prevent GitHub Actions timeout
 
 logging.basicConfig(
     level=logging.INFO,
@@ -82,8 +82,8 @@ def load_llm():
     # n_threads=2 matches the standard GitHub Runner specs.
     llm = Llama(
         model_path=MODEL_PATH,
-        n_ctx=2048,
-        n_threads=2,
+        n_ctx=4096,
+        n_threads=4,
         verbose=False 
     )
     logging.info("Model loaded successfully.")
