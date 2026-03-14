@@ -17,7 +17,7 @@ DEST_SHEET_NAME = 'News Scrapper AI Processed'
 DEST_WORKSHEET_NAME = 'Sheet1'
 
 MODEL_PATH = "./models/gemma-2b-it-q4_k_m.gguf"
-MAX_ARTICLES_TO_PROCESS = 7
+MAX_ARTICLES_TO_PROCESS = 11
 MAX_RUNTIME_SECONDS = 5 * 3600  # 5.5 hours to prevent GitHub Actions timeout
 
 logging.basicConfig(
