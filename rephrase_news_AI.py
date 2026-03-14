@@ -16,7 +16,7 @@ SOURCE_WORKSHEET_NAME = 'Sheet1'
 DEST_SHEET_NAME = 'News Scrapper AI Processed'
 DEST_WORKSHEET_NAME = 'Sheet1'
 
-MODEL_PATH = "./models/gemma-2b-it-q4_k_m.gguf"
+MODEL_PATH = "./models/gemma-2b-it-q6_k_m.gguf"
 MAX_ARTICLES_TO_PROCESS = 11
 MAX_RUNTIME_SECONDS = 5 * 3600  # 5.5 hours to prevent GitHub Actions timeout
 
@@ -83,6 +83,7 @@ def load_llm():
     llm = Llama(
         model_path=MODEL_PATH,
         n_ctx=4096,
+        n_batch=512,
         n_threads=4,
         verbose=False 
     )
@@ -100,6 +101,7 @@ You are an expert journalist. Rephrase the provided article into a concise, natu
 3. --Structure:-- Provide a compelling Title, followed by 1 or 2 short paragraphs that deliver the absolute core of the story. 
 4. --Constraint:-- The total length must be strictly under 150 words.
 5. --Tone:-- Objective, factual, and direct. Do not include any filler, introductory, or concluding remarks.
+6. --Never add or assume information not explicitly present in the article.
 
 Article: {content}
 <end_of_turn>
@@ -109,12 +111,14 @@ Article: {content}
     response = llm(
         prompt,
         max_tokens=400, 
+        top_p = 0.9,
         stop=["<end_of_turn>", "Article:"], 
         temperature=0.2,
+        repeat_penalty = 1.1,
         echo=False
     )
     
-    rephrased_text = response['choices'][0]['text'].strip()
+    rephrased_text = response['choices'][0].get('text', '').strip()
     return rephrased_text
 
 # ==============================================================================
