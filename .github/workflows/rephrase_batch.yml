@@ -2,7 +2,7 @@ name: Run News AI Rephraser
 
 on:
   schedule:
-    - cron: '0 */4 * * *'  # Run every 4 hours
+    - cron: '0 */12 * * *'  # Run every 12 hours
   workflow_dispatch:      # Manual trigger
 
 concurrency:
@@ -27,7 +27,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ./models
-          key: ${{ runner.os }}-gemma-2b-q4
+          key: ${{ runner.os }}-gemma-2b-q6
           restore-keys: |
             ${{ runner.os }}-gemma-2b-
 
@@ -41,10 +41,10 @@ jobs:
       - name: Download Gemma Model
         run: |
           mkdir -p models
-          if [ ! -f "./models/gemma-2b-it-q4_k_m.gguf" ]; then
+          if [ ! -f "./models/gemma-2b-it-q6_k_m.gguf" ]; then
             echo "Downloading model from HuggingFace..."
-            huggingface-cli download bartowski/gemma-2-2b-it-GGUF gemma-2-2b-it-Q4_K_M.gguf --local-dir ./models --local-dir-use-symlinks False
-            mv ./models/gemma-2-2b-it-Q4_K_M.gguf ./models/gemma-2b-it-q4_k_m.gguf
+            huggingface-cli download bartowski/gemma-2-2b-it-GGUF gemma-2-2b-it-Q6_K.gguf --local-dir ./models --local-dir-use-symlinks False
+            mv ./models/gemma-2-2b-it-Q6_K.gguf ./models/gemma-2b-it-q6_k_m.gguf
           else
             echo "Model already cached."
           fi
