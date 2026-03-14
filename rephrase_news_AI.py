@@ -92,18 +92,14 @@ def load_llm():
 def rephrase_article(llm, content):
     prompt = f"""
 <start_of_turn>user
-You are a Senior News Editor. Your task is to rephrase the provided article into a high-quality, mobile-friendly News Card.
+You are an expert journalist. Rephrase the provided article into a concise, natural-reading news brief.
 
-### RULES:
-1. **Language:** Use very simple, clear language (Grade 8 level).
-2. **Structure:** Use the EXACT format below:
-   - ## [Catchy Short Title]
-   - **The Big Picture:** [1-sentence high-level summary]
-   - **Key Facts:** * [Fact 1]
-     * [Fact 2]
-     * [Fact 3]
-3. **Constraint:** Total word count must be under 100-150 words.
-4. **Tone:** Professional and objective. No "fluff" or "intro/outro" text.
+--- RULES: ---
+1. --Style:-- Write in a natural, flowing paragraph format. Do not use bullet points or rigid templates. It should feel like reading a normal, professional news story.
+2. --Language:-- Use simple, everyday English (Grade 8 level) so it is effortless to read on a screen.
+3. --Structure:-- Provide a compelling Title, followed by 1 or 2 short paragraphs that deliver the absolute core of the story. 
+4. --Constraint:-- The total length must be strictly under 150 words.
+5. --Tone:-- Objective, factual, and direct. Do not include any filler, introductory, or concluding remarks.
 
 Article: {content}
 <end_of_turn>
@@ -112,9 +108,9 @@ Article: {content}
     
     response = llm(
         prompt,
-        max_tokens=230, 
-        stop=["\n\n", "- Article:"], 
-        temperature=0.3,
+        max_tokens=400, 
+        stop=["<end_of_turn>", "Article:"], 
+        temperature=0.2,
         echo=False
     )
     
