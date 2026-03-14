@@ -1,0 +1,54 @@
+name: Run News AI Rephraser
+
+on:
+  schedule:
+    - cron: '0 */12 * * *'  # Run every 12 hours
+  workflow_dispatch:      # Manual trigger
+
+concurrency:
+  group: news-rephraser
+  cancel-in-progress: false
+
+jobs:
+  process_articles:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Cache HuggingFace Models
+        uses: actions/cache@v3
+        with:
+          path: ./models
+          key: ${{ runner.os }}-gemma-2b-q4
+          restore-keys: |
+            ${{ runner.os }}-gemma-2b-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Download Gemma Model
+        run: |
+          mkdir -p models
+          if [ ! -f "./models/gemma-2b-it-q4_k_m.gguf" ]; then
+            echo "Downloading model from HuggingFace..."
+            huggingface-cli download bartowski/gemma-2-2b-it-GGUF gemma-2-2b-it-Q4_K_M.gguf --local-dir ./models --local-dir-use-symlinks False
+            mv ./models/gemma-2-2b-it-Q4_K_M.gguf ./models/gemma-2b-it-q4_k_m.gguf
+          else
+            echo "Model already cached."
+          fi
+
+      - name: Run Rephraser Pipeline
+        env:
+          GCP_SERVICE_ACCOUNT_JSON: ${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}
+        run: |
+          python rephrase_news_AI.py
