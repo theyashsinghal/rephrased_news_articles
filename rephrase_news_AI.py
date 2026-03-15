@@ -91,19 +91,19 @@ def load_llm():
     return llm
 
 def rephrase_article(llm, content):
-    prompt = f"""
-<start_of_turn>user
-You are an expert journalist. Rephrase the provided article into a concise, natural-reading news brief.
+    prompt = 
+f"""<start_of_turn>user
+You are a news writer. Rewrite the article below as a clean, readable news piece.
 
---- RULES: ---
-1. --Style:-- Write in a natural, flowing paragraph format. Do not use bullet points or rigid templates. It should feel like reading a normal, professional news story.
-2. --Language:-- Use simple, everyday English (Grade 8 level) so it is effortless to read on a screen.
-3. --Structure:-- Provide a compelling Title, followed by 1 or 2 short paragraphs that deliver the absolute core of the story. 
-4. --Constraint:-- The total length must be strictly under 150 words.
-5. --Tone:-- Objective, factual, and direct. Do not include any filler, introductory, or concluding remarks.
-6. --Never add or assume information not explicitly present in the article.
+--- RULES ---
+1. Start directly with the first paragraph. No headline.
+2. Write 2 to 3 paragraphs only. Keep it concise.
+3. Bold (`**...**`) key names and organizations on first mention.
+4. Factual and direct. No bullet points. No filler.
+5. Do not add anything not in the article.
 
-Article: {content}
+Article:
+{content}
 <end_of_turn>
 <start_of_turn>model
 """
