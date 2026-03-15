@@ -91,8 +91,7 @@ def load_llm():
     return llm
 
 def rephrase_article(llm, content):
-    prompt = 
-f"""<start_of_turn>user
+    prompt = f"""<start_of_turn>user
 You are a news writer. Rewrite the article below as a clean, readable news piece.
 
 --- RULES ---
@@ -110,10 +109,10 @@ Article:
     
     response = llm(
         prompt,
-        max_tokens=400, 
+        max_tokens=500, 
         top_p = 0.9,
         stop=["<end_of_turn>", "Article:"], 
-        temperature=0.2,
+        temperature=0.3,
         repeat_penalty = 1.1,
         echo=False
     )
