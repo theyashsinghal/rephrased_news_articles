@@ -92,14 +92,15 @@ def load_llm():
 
 def rephrase_article(llm, content):
     prompt = f"""<start_of_turn>user
-You are a news writer. Rewrite the article below as a clean, readable news piece.
+Rewrite the news article below as a concise news summary.
 
---- RULES ---
-1. Start directly with the first paragraph. No headline.
-2. Write 2 to 3 paragraphs only. Keep it concise.
-3. Bold (`**...**`) key names and organizations on first mention.
-4. Factual and direct. No bullet points. No filler.
-5. Do not add anything not in the article.
+Rules:
+1. Maximum 60 words.
+2. One paragraph only.
+3. No headline.
+4. Bold (**...**) important people or organizations on first mention.
+5. Do not add information that is not present in the article.
+6. Clear, factual, journalistic tone.
 
 Article:
 {content}
@@ -109,10 +110,10 @@ Article:
     
     response = llm(
         prompt,
-        max_tokens=500, 
+        max_tokens=100, 
         top_p = 0.9,
         stop=["<end_of_turn>", "Article:"], 
-        temperature=0.3,
+        temperature=0.25,
         repeat_penalty = 1.1,
         echo=False
     )
