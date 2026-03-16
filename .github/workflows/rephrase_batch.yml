@@ -2,7 +2,7 @@ name: Run News AI Rephraser
 
 on:
   schedule:
-    - cron: '0 */3 * * *'  # Run every 3 hours
+    - cron: '0 */1 * * *'  # Run every 1 hour
   workflow_dispatch:      # Manual trigger
 
 concurrency:
