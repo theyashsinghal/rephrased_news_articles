@@ -95,14 +95,13 @@ def rephrase_article(llm, content):
 Rewrite the news article below as a concise news summary.
 
 Rules:
-1. In 50 to 60 words.
+1. In ONLY 50 to 60 words.
 2. One paragraph only.
 3. No headline or title.
 4. Bold (**...**) important people or organizations on first mention.
 5. Do NOT add information that is not present in the article.
 6. Clear, factual, journalistic tone.
-7. With proper ending of lines.
-8. Always end with a complete sentence. Never stop mid-sentence.
+7. Always end with a complete sentence. NEVER stop mid-sentence.
 
 Article:
 {content}
