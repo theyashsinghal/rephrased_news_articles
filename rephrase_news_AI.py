@@ -92,16 +92,17 @@ def load_llm():
 
 def rephrase_article(llm, content):
     prompt = f"""<start_of_turn>user
-Rewrite the news article below as a concise news summary with in 50 to 60 words, hard limit.
+Rewrite the news article below as a concise news summary.
 
 Rules:
-1. Maximum 60 words.
+1. In 50 to 60 words.
 2. One paragraph only.
-3. No headline.
+3. No headline or title.
 4. Bold (**...**) important people or organizations on first mention.
 5. Do NOT add information that is not present in the article.
 6. Clear, factual, journalistic tone.
 7. With proper ending of lines.
+8. Always end with a complete sentence. Never stop mid-sentence.
 
 Article:
 {content}
@@ -111,7 +112,7 @@ Article:
     
     response = llm(
         prompt,
-        max_tokens=120, 
+        max_tokens=200, 
         top_p = 0.9,
         stop=["<end_of_turn>", "Article:"], 
         temperature=0.25,
@@ -120,6 +121,16 @@ Article:
     )
     
     rephrased_text = response['choices'][0].get('text', '').strip()
+
+    if rephrased_text and rephrased_text[-1] not in '.!?"\'':
+        last_sentence_end = max(
+            rephrased_text.rfind('.'),
+            rephrased_text.rfind('!'),
+            rephrased_text.rfind('?')
+        )
+        if last_sentence_end != -1:
+            rephrased_text = rephrased_text[:last_sentence_end + 1]
+
     return rephrased_text
 
 # ==============================================================================
