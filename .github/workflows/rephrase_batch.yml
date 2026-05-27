@@ -2,7 +2,8 @@ name: Run News AI Rephraser
 
 on:
   schedule:
-    - cron: '*/29 * * * *'  # Run every 1 hour
+    # Runs every 29 minutes (highly responsive schedule)
+    - cron: '*/29 * * * *'
   workflow_dispatch:      # Manual trigger
 
 concurrency:
@@ -18,35 +19,42 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Python 3.10
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10'
           cache: 'pip'
 
       - name: Cache HuggingFace Models
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ./models
-          key: ${{ runner.os }}-gemma-2b-q6
+          key: ${{ runner.os }}-gemma-2-2b-q6-v2 # standard cache key update
           restore-keys: |
-            ${{ runner.os }}-gemma-2b-
+            ${{ runner.os }}-gemma-2-2b-
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install huggingface_hub
           export CMAKE_ARGS="-DLLAMA_AVX=OFF -DLLAMA_AVX2=OFF -DLLAMA_FMA=OFF"
           pip install --no-cache-dir "llama-cpp-python>=0.2.90"
-          pip install -r requirements.txt
+          # Check if requirements.txt exists before installing
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          else
+            pip install gspread oauth2client
+          fi
 
       - name: Download Gemma Model
         run: |
           mkdir -p models
           if [ ! -f "./models/gemma-2b-it-q6_k_m.gguf" ]; then
-            echo "Downloading model from HuggingFace..."
+            echo "Downloading Gemma 2 2B model from HuggingFace..."
             huggingface-cli download bartowski/gemma-2-2b-it-GGUF gemma-2-2b-it-Q6_K.gguf --local-dir ./models --local-dir-use-symlinks False
+            # Rename to act as a drop-in replacement for the old filename in python
             mv ./models/gemma-2-2b-it-Q6_K.gguf ./models/gemma-2b-it-q6_k_m.gguf
           else
-            echo "Model already cached."
+            echo "Gemma 2 2B model loaded from cache."
           fi
 
       - name: Run Rephraser Pipeline
