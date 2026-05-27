@@ -16,9 +16,10 @@ SOURCE_WORKSHEET_NAME = 'Sheet1'
 DEST_SHEET_NAME = 'News Scrapper AI Processed'
 DEST_WORKSHEET_NAME = 'Sheet1'
 
-MODEL_PATH = "./models/gemma-2b-it-q6_k_m.gguf"
+# Upgraded to Gemma 2 2B IT (Q6_K_L Quantization)
+MODEL_PATH = "./models/gemma-2-2b-it-Q6_K_L.gguf"
 MAX_ARTICLES_TO_PROCESS = 200
-MAX_RUNTIME_SECONDS = 5 * 3600  # 5.5 hours to prevent GitHub Actions timeout
+MAX_RUNTIME_SECONDS = 5 * 3600
 
 logging.basicConfig(
     level=logging.INFO,
@@ -74,12 +75,10 @@ def get_existing_urls(dest_sheet):
 # --- AI INFERENCE SETUP ---
 # ==============================================================================
 def load_llm():
-    logging.info(f"Loading Gemma model from {MODEL_PATH}...")
+    logging.info(f"Loading Gemma 2 2B model from {MODEL_PATH}...")
     if not os.path.exists(MODEL_PATH):
         raise FileNotFoundError(f"Model file not found at {MODEL_PATH}")
         
-    # n_ctx is the context window. 2048 is plenty for 100-word outputs.
-    # n_threads=2 matches the standard GitHub Runner specs.
     llm = Llama(
         model_path=MODEL_PATH,
         n_ctx=4096,
@@ -112,15 +111,16 @@ Article:
     response = llm(
         prompt,
         max_tokens=200, 
-        top_p = 0.9,
+        top_p=0.9,
         stop=["<end_of_turn>", "Article:"], 
         temperature=0.25,
-        repeat_penalty = 1.1,
+        repeat_penalty=1.1,
         echo=False
     )
     
     rephrased_text = response['choices'][0].get('text', '').strip()
 
+    # Ensure clean full-sentence ending
     if rephrased_text and rephrased_text[-1] not in '.!?"\'':
         last_sentence_end = max(
             rephrased_text.rfind('.'),
@@ -163,7 +163,6 @@ def main():
     processed_count = 0
     
     for article in parsed_articles:
-        # 1. Global Timeout Check
         if time.time() - start_time > MAX_RUNTIME_SECONDS:
             logging.warning("Approaching maximum GitHub Actions runtime. Halting execution gracefully.")
             break
@@ -172,11 +171,9 @@ def main():
         if not url:
             continue
             
-        # 2. Cache Check
         if url in existing_urls:
             continue
             
-        # 3. Lazy Load LLM (Only load into RAM if we actually have work to do)
         if llm is None:
             llm = load_llm()
             
@@ -190,14 +187,11 @@ def main():
         logging.info(f"Processing: {title}")
         
         try:
-            # 4. Generate Rephrase
             rephrased = rephrase_article(llm, content)
             
-            # 5. Append new key
             article['rephrased_article'] = rephrased
             article['rephrased_at'] = str(datetime.now())
             
-            # 6. Save to Destination Sheet
             safe_json = json.dumps(article)
             dest_sheet.append_row([safe_json])
             
@@ -205,7 +199,6 @@ def main():
             processed_count += 1
             logging.info(f"Successfully saved rephrased article. (Total this run: {processed_count})")
             
-            # Rate limiting for Google Sheets API
             time.sleep(2.0)
             
         except Exception as e:
