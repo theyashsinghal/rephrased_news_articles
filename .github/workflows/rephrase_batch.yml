@@ -59,3 +59,11 @@ jobs:
           GCP_SERVICE_ACCOUNT_JSON: ${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}
         run: |
           python rephrase_news_AI.py
+
+      - name: Trigger Classifier Workflow
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.TRIGGER_CLASSIFIER_TOKEN }}
+          repository: OWNER_OF_CLASSIFIER/CLASSIFIER_REPO_NAME # <--- Replace with classifier account/repo path (e.g., theyashsinghal/classifier)
+          event-type: trigger-classifier
+          client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
