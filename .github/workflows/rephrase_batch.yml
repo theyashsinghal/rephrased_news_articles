@@ -28,7 +28,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ./models
-          key: ${{ runner.os }}-gemma-2-2b-q6-v2 # standard cache key update
+          key: ${{ runner.os }}-gemma-2-2b-q6-v3 # cache key aligned with new name
           restore-keys: |
             ${{ runner.os }}-gemma-2-2b-
 
@@ -48,11 +48,9 @@ jobs:
       - name: Download Gemma Model
         run: |
           mkdir -p models
-          if [ ! -f "./models/gemma-2b-it-q6_k_m.gguf" ]; then
+          if [ ! -f "./models/gemma-2-2b-it-Q6_K_L.gguf" ]; then
             echo "Downloading Gemma 2 2B model from HuggingFace..."
-            huggingface-cli download bartowski/gemma-2-2b-it-GGUF gemma-2-2b-it-Q6_K.gguf --local-dir ./models --local-dir-use-symlinks False
-            # Rename to act as a drop-in replacement for the old filename in python
-            mv ./models/gemma-2-2b-it-Q6_K.gguf ./models/gemma-2b-it-q6_k_m.gguf
+            huggingface-cli download bartowski/gemma-2-2b-it-GGUF gemma-2-2b-it-Q6_K_L.gguf --local-dir ./models --local-dir-use-symlinks False
           else
             echo "Gemma 2 2B model loaded from cache."
           fi
