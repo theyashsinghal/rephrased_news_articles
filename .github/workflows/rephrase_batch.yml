@@ -1,10 +1,9 @@
 name: Run News AI Rephraser
 
 on:
-  schedule:
-    # Runs every 29 minutes (highly responsive schedule)
-    - cron: '*/29 * * * *'
-  workflow_dispatch:      # Manual trigger
+  repository_dispatch:
+    types: [trigger-rephraser] # Listens for the Scraper's trigger signal
+  workflow_dispatch:          # Manual trigger
 
 concurrency:
   group: news-rephraser
@@ -28,7 +27,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ./models
-          key: ${{ runner.os }}-gemma-2-2b-q6-v3 # cache key aligned with new name
+          key: ${{ runner.os }}-gemma-2-2b-q6-v3 # Aligned to the Gemma 2 filename
           restore-keys: |
             ${{ runner.os }}-gemma-2-2b-
 
