@@ -1,13 +1,13 @@
 name: Run News AI Rephraser
 
-on:
-  repository_dispatch:
-    types: [trigger-rephraser] # Listens for the Scraper's trigger signal
-  workflow_dispatch:          # Manual trigger
+# on:
+#   repository_dispatch:
+#     types: [trigger-rephraser] # Listens for the Scraper's trigger signal
+#   workflow_dispatch:          # Manual trigger
 
-concurrency:
-  group: news-rephraser
-  cancel-in-progress: false
+# concurrency:
+#   group: news-rephraser
+#   cancel-in-progress: false
 
 jobs:
   process_articles:
