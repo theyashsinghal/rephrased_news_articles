@@ -53,10 +53,10 @@ def get_db_connection():
     
     if db_url and (db_url.startswith('libsql://') or db_url.startswith('https://')):
         try:
-            import turso
-            return turso.connect(DB_PATH, remote_url=db_url, auth_token=db_token)
+            import libsql
+            return libsql.connect(database=db_url, auth_token=db_token)
         except ImportError:
-            logging.error("pyturso package not installed. Falling back to local sqlite3.")
+            logging.error("libsql package not installed. Falling back to local sqlite3.")
             
     import sqlite3
     return sqlite3.connect(DB_PATH)
