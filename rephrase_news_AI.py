@@ -138,7 +138,7 @@ def main():
         
     logging.info("Fetching un-rephrased articles from database...")
     try:
-        cursor.execute("SELECT id, title, content FROM articles WHERE status = 'scraped' LIMIT ?", (MAX_ARTICLES_TO_PROCESS,))
+        cursor.execute("SELECT id, title, content FROM articles WHERE status = 'scraped' ORDER BY id DESC LIMIT ?", (MAX_ARTICLES_TO_PROCESS,))
         rows = cursor.fetchall()
     except Exception as e:
         logging.critical(f"Failed to query articles: {e}")
