@@ -2,20 +2,14 @@ import os
 import json
 import time
 import logging
+import sqlite3
+import zlib
 from datetime import datetime
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
 from llama_cpp import Llama
 
 # ==============================================================================
 # --- CONFIGURATION ---
 # ==============================================================================
-SOURCE_SHEET_NAME = 'News Scrapper AI'
-SOURCE_WORKSHEET_NAME = 'Sheet1'
-
-DEST_SHEET_NAME = 'News Scrapper AI Processed'
-DEST_WORKSHEET_NAME = 'Sheet1'
-
 # Upgraded to Gemma 2 2B IT (Q6_K_L Quantization)
 MODEL_PATH = "./models/gemma-2-2b-it-Q6_K_L.gguf"
 MAX_ARTICLES_TO_PROCESS = 200
@@ -27,49 +21,45 @@ logging.basicConfig(
 )
 
 # ==============================================================================
-# --- GOOGLE SHEETS SETUP ---
+# --- DATABASE CONFIGURATION ---
 # ==============================================================================
-def connect_to_sheets():
-    logging.info("Connecting to Google Sheets...")
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    gcp_json = os.environ.get("GCP_SERVICE_ACCOUNT_JSON")
-    
-    if not gcp_json:
-        raise ValueError("GCP_SERVICE_ACCOUNT_JSON missing from environment variables!")
-        
-    creds_dict = json.loads(gcp_json)
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-    client = gspread.authorize(creds)
-    
-    source_sheet = client.open(SOURCE_SHEET_NAME).worksheet(SOURCE_WORKSHEET_NAME)
-    
-    try:
-        dest_sheet = client.open(DEST_SHEET_NAME).worksheet(DEST_WORKSHEET_NAME)
-    except gspread.exceptions.SpreadsheetNotFound:
-        logging.critical(f"Destination sheet '{DEST_SHEET_NAME}' not found. Please create it.")
-        raise
-        
-    return source_sheet, dest_sheet
+def load_env():
+    # Check both current directory and parent directory for .env
+    env_paths = [
+        os.path.join(os.path.dirname(__file__), '.env'),
+        os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
+    ]
+    for env_path in env_paths:
+        if os.path.exists(env_path):
+            with open(env_path, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#') and '=' in line:
+                        key, val = line.split('=', 1)
+                        os.environ[key.strip()] = val.strip()
 
-def get_existing_urls(dest_sheet):
-    logging.info("Fetching existing URLs from destination sheet to build cache...")
-    existing_urls = set()
-    try:
-        raw_data = dest_sheet.col_values(1)
-        for cell in raw_data:
-            if not cell:
-                continue
-            try:
-                data = json.loads(cell)
-                if 'url' in data:
-                    existing_urls.add(data['url'])
-            except json.JSONDecodeError:
-                continue
-    except Exception as e:
-        logging.error(f"Error fetching destination sheet data: {e}")
-        
-    logging.info(f"Loaded {len(existing_urls)} existing URLs from destination.")
-    return existing_urls
+load_env()
+
+# Self-healing default local path for environments like GHA
+default_db_path = '/Users/mac/Downloads/Code/Satya/satya.db'
+if not os.path.exists(os.path.dirname(default_db_path)):
+    default_db_path = os.path.join(os.path.dirname(__file__), 'satya.db')
+
+DB_PATH = os.environ.get('SATYA_DB_PATH', default_db_path)
+
+def get_db_connection():
+    db_url = os.environ.get('SATYA_DB_URL')
+    db_token = os.environ.get('SATYA_DB_TOKEN')
+    
+    if db_url and (db_url.startswith('libsql://') or db_url.startswith('https://')):
+        try:
+            import turso
+            return turso.connect(DB_PATH, remote_url=db_url, auth_token=db_token)
+        except ImportError:
+            logging.error("pyturso package not installed. Falling back to local sqlite3.")
+            
+    import sqlite3
+    return sqlite3.connect(DB_PATH)
 
 # ==============================================================================
 # --- AI INFERENCE SETUP ---
@@ -139,71 +129,81 @@ def main():
     start_time = time.time()
     logging.info("--- Starting News Rephrasing Pipeline ---")
     
-    source_sheet, dest_sheet = connect_to_sheets()
-    existing_urls = get_existing_urls(dest_sheet)
-    
-    logging.info("Fetching latest records from source sheet...")
-    raw_source_data = source_sheet.col_values(1)
-    
-    # Get the latest MAX_ARTICLES_TO_PROCESS
-    articles_to_check = raw_source_data[-MAX_ARTICLES_TO_PROCESS:] if len(raw_source_data) > MAX_ARTICLES_TO_PROCESS else raw_source_data
-    
-    parsed_articles = []
-    for cell in articles_to_check:
-        if not cell:
-            continue
-        try:
-            parsed_articles.append(json.loads(cell))
-        except json.JSONDecodeError:
-            continue
-            
-    logging.info(f"Evaluating {len(parsed_articles)} articles for processing...")
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+    except Exception as e:
+        logging.critical(f"Failed to connect to database: {e}")
+        return
+        
+    logging.info("Fetching un-rephrased articles from database...")
+    try:
+        cursor.execute("SELECT id, title, content FROM articles WHERE status = 'scraped' LIMIT ?", (MAX_ARTICLES_TO_PROCESS,))
+        rows = cursor.fetchall()
+    except Exception as e:
+        logging.critical(f"Failed to query articles: {e}")
+        conn.close()
+        return
+        
+    logging.info(f"Evaluating {len(rows)} articles for rephrasing...")
     
     llm = None
     processed_count = 0
     
-    for article in parsed_articles:
+    for r in rows:
         if time.time() - start_time > MAX_RUNTIME_SECONDS:
             logging.warning("Approaching maximum GitHub Actions runtime. Halting execution gracefully.")
             break
             
-        url = article.get('url')
-        if not url:
-            continue
-            
-        if url in existing_urls:
-            continue
-            
-        if llm is None:
-            llm = load_llm()
-            
-        content = article.get('content', '')
-        title = article.get('title', 'Unknown Title')
+        article_id = r[0]
+        title = r[1]
+        compressed_content = r[2]
         
+        try:
+            content = zlib.decompress(compressed_content).decode('utf-8') if compressed_content else ""
+        except Exception as e:
+            logging.error(f"Failed to decompress content for article {article_id}: {e}")
+            continue
+            
         if len(content.split()) < 20:
             logging.warning(f"Skipping {title} - content too short.")
+            try:
+                cursor.execute("UPDATE articles SET status = 'skipped_short' WHERE id = ?", (article_id,))
+                conn.commit()
+            except Exception as e_upd:
+                logging.error(f"Failed to update skipped status: {e_upd}")
             continue
             
         logging.info(f"Processing: {title}")
         
         try:
+            if llm is None:
+                llm = load_llm()
+                
             rephrased = rephrase_article(llm, content)
             
-            article['rephrased_article'] = rephrased
-            article['rephrased_at'] = str(datetime.now())
+            if not rephrased:
+                logging.error(f"Rephraser returned empty text for {title}")
+                continue
+                
+            compressed_rephrased = zlib.compress(rephrased.encode('utf-8'))
             
-            safe_json = json.dumps(article)
-            dest_sheet.append_row([safe_json])
+            cursor.execute("""
+                UPDATE articles 
+                SET rephrased_article = ?, status = 'rephrased' 
+                WHERE id = ?
+            """, (compressed_rephrased, article_id))
+            conn.commit()
             
-            existing_urls.add(url)
             processed_count += 1
-            logging.info(f"Successfully saved rephrased article. (Total this run: {processed_count})")
+            logging.info(f"Successfully saved rephrased article {article_id}. (Total this run: {processed_count})")
             
             time.sleep(2.0)
             
         except Exception as e:
-            logging.error(f"Failed to process article {url}: {e}")
+            logging.error(f"Failed to process article {article_id}: {e}")
             
+    conn.close()
     logging.info(f"--- Pipeline Finished. Processed {processed_count} new articles. ---")
 
 if __name__ == '__main__':
