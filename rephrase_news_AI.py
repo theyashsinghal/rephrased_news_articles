@@ -173,14 +173,27 @@ def main():
             except Exception as e_upd:
                 logging.error(f"Failed to update skipped status: {e_upd}")
             continue
-            
         logging.info(f"Processing: {title}")
         
         try:
             if llm is None:
                 llm = load_llm()
                 
-            rephrased = rephrase_article(llm, content)
+            rephrased = None
+            try:
+                rephrased = rephrase_article(llm, content)
+            except Exception as inner_e:
+                err_msg = str(inner_e).lower()
+                if "context window" in err_msg or "token" in err_msg or "exceed" in err_msg:
+                    max_chars = 12000
+                    if len(content) > max_chars:
+                        logging.info(f"Article {article_id} exceeded context window. Retrying with smart truncation to {max_chars} chars...")
+                        truncated_content = content[:max_chars] + "..."
+                        rephrased = rephrase_article(llm, truncated_content)
+                    else:
+                        raise inner_e
+                else:
+                    raise inner_e
             
             if not rephrased:
                 logging.error(f"Rephraser returned empty text for {title}")
