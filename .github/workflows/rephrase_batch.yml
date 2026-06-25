@@ -12,6 +12,8 @@ concurrency:
 jobs:
   process_articles:
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
 
     steps:
       - name: Checkout repository
@@ -69,3 +71,36 @@ jobs:
           repository: raam-07/SATYA-NEWS-CLASSIFIER # <--- Replace with classifier account/repo path (e.g., theyashsinghal/classifier)
           event-type: trigger-classifier
           client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
+
+      - name: Trigger next Rephraser run if remaining
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SATYA_DB_URL: ${{ secrets.SATYA_DB_URL }}
+          SATYA_DB_TOKEN: ${{ secrets.SATYA_DB_TOKEN }}
+        run: |
+          REMAINING=$(python -c "
+          import os, urllib.request, json
+          URL = os.environ['SATYA_DB_URL']
+          TOK = os.environ['SATYA_DB_TOKEN']
+          host = URL.replace('libsql://', 'https://').rstrip('/')
+          stmt = {'sql': \"SELECT COUNT(*) FROM articles WHERE status = 'scraped'\"}
+          body = {'requests':[{'type':'execute','stmt':stmt},{'type':'close'}]}
+          req = urllib.request.Request(host+'/v2/pipeline', data=json.dumps(body).encode(),
+                  headers={'Authorization':f'Bearer {TOK}','Content-Type':'application/json'})
+          with urllib.request.urlopen(req, timeout=30) as r:
+              res = json.load(r)
+          count = int(res['results'][0]['response']['result']['rows'][0][0]['value'])
+          print(count)
+          ")
+          echo "Remaining scraped articles: $REMAINING"
+          if [ "$REMAINING" -gt 0 ]; then
+            echo "More scraped articles remain. Triggering next Rephraser run..."
+            curl -X POST \
+              -H "Authorization: token $GITHUB_TOKEN" \
+              -H "Accept: application/vnd.github.v3+json" \
+              https://api.github.com/repos/${{ github.repository }}/actions/workflows/rephrase_batch.yml/dispatches \
+              -d '{"ref":"${{ github.ref_name }}"}'
+          else
+            echo "All scraped articles rephrased."
+          fi
+
