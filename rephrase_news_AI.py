@@ -5,7 +5,6 @@ import logging
 import sqlite3
 import zlib
 from datetime import datetime
-from llama_cpp import Llama
 
 # ==============================================================================
 # --- CONFIGURATION ---
@@ -65,6 +64,7 @@ def get_db_connection():
 # --- AI INFERENCE SETUP ---
 # ==============================================================================
 def load_llm():
+    from llama_cpp import Llama
     logging.info(f"Loading Gemma 2 2B model from {MODEL_PATH}...")
     if not os.path.exists(MODEL_PATH):
         raise FileNotFoundError(f"Model file not found at {MODEL_PATH}")
@@ -121,6 +121,110 @@ Article:
             rephrased_text = rephrased_text[:last_sentence_end + 1]
 
     return rephrased_text
+
+# ==============================================================================
+# --- REPHRASED HEADLINE GENERATION & VALIDATION ---
+# ==============================================================================
+
+TITLE_PROMPT = """<start_of_turn>user
+You write headlines for SatyaDheesh, an Indian news platform.
+Rewrite the headline for the article below.
+
+RULES:
+1. ONE headline only. Maximum 12 words. No quotes around it.
+2. Punchy and direct — strong active verbs, lead with the most striking fact.
+3. Every name, number, and fact MUST come from the article below. Never invent or exaggerate.
+4. If someone CLAIMS or PROMISES something, keep it as their claim:
+   "Modi vows 2 crore jobs" — never "2 crore jobs coming".
+5. No question headlines. No "this is why / here's what" teasers.
+6. Numbers make headlines stronger — use them when the article has them.
+
+GOOD: "Yogi vows to end mafia raj in UP"
+GOOD: "11 dead in Bondi Beach mass shooting, gunman tackled by bystander"
+GOOD: "Kerala polls: UDF storms back to power in Kochi"
+BAD:  "You won't believe what happened in Kerala" (teaser)
+BAD:  "2 crore jobs created every year" (drops attribution)
+
+ORIGINAL TITLE: {title}
+ARTICLE: {body_snippet}
+
+HEADLINE:
+<end_of_turn>
+<start_of_turn>model
+"""
+
+def generate_rephrased_title(llm, original_title, body_snippet):
+    prompt = TITLE_PROMPT.format(title=original_title, body_snippet=body_snippet)
+    
+    response = llm(
+        prompt,
+        max_tokens=50, 
+        top_p=0.9,
+        stop=["<end_of_turn>", "ORIGINAL TITLE:"], 
+        temperature=0.2,
+        repeat_penalty=1.1,
+        echo=False
+    )
+    
+    return response['choices'][0].get('text', '').strip()
+
+import re
+import string
+
+def validate_rephrased_title(generated_title, original_title, body):
+    gen_title = generated_title.strip()
+    
+    # 1. Check length
+    words = gen_title.split()
+    if len(words) < 3 or len(words) > 12:
+        return False, f"length {len(words)} out of bounds [3, 12]"
+        
+    # 2. Check leading/trailing quotes
+    if gen_title.startswith('"') or gen_title.endswith('"') or gen_title.startswith("'") or gen_title.endswith("'"):
+        return False, "contains leading or trailing quotes"
+        
+    # Helper to check if a word (proper noun or number) is in text
+    def clean_word(w):
+        return "".join(c for c in w if c.isalnum()).lower()
+        
+    # Normalize number strings for comparison
+    def normalize_numbers(text):
+        text_lower = text.lower()
+        text_lower = re.sub(r'(\d+)\s+(crore|lakh|million|billion|percent|pct)', r'\1\2', text_lower)
+        return text_lower
+
+    norm_gen = normalize_numbers(gen_title)
+    norm_orig = normalize_numbers(original_title)
+    norm_body = normalize_numbers(body)
+
+    # 3. Extract proper nouns (all capitalized words, including the first word)
+    punctuation = string.punctuation
+    proper_nouns = []
+    for idx, w in enumerate(words):
+        cleaned_w = w.strip(punctuation)
+        if not cleaned_w:
+            continue
+        if cleaned_w[0].isupper():
+            proper_nouns.append(cleaned_w)
+            
+    # 4. Extract all numbers (including normalized units)
+    numbers = re.findall(r'\b\d+(?:crore|lakh|million|billion|percent|pct)?\b', norm_gen)
+    
+    # Verify proper nouns are in original title or body
+    for pn in proper_nouns:
+        pn_clean = clean_word(pn)
+        if not pn_clean:
+            continue
+        if pn_clean not in norm_orig and pn_clean not in norm_body:
+            return False, f"proper noun '{pn}' not found in source"
+
+    # Verify numbers are in original title or body
+    for num in numbers:
+        pattern = r'\b' + re.escape(num) + r'\b'
+        if not re.search(pattern, norm_orig) and not re.search(pattern, norm_body):
+            return False, f"number '{num}' not found in source"
+            
+    return True, None
 
 # ==============================================================================
 # --- MAIN PIPELINE ---
@@ -180,8 +284,18 @@ def main():
                 llm = load_llm()
                 
             rephrased = None
+            rephrased_title = None
             try:
                 rephrased = rephrase_article(llm, content)
+                if rephrased:
+                    body_snippet = content[:1500]
+                    rephrased_title = generate_rephrased_title(llm, title, body_snippet)
+                    
+                    is_valid, reject_reason = validate_rephrased_title(rephrased_title, title, content)
+                    if not is_valid:
+                        # Log validation failure: article_id, reason, generated text
+                        logging.warning(f"[Validation Failed] Article ID {article_id} title rejected: {reject_reason}. Generated: '{rephrased_title}'")
+                        rephrased_title = None
             except Exception as inner_e:
                 err_msg = str(inner_e).lower()
                 if "context window" in err_msg or "token" in err_msg or "exceed" in err_msg:
@@ -190,6 +304,13 @@ def main():
                         logging.info(f"Article {article_id} exceeded context window. Retrying with smart truncation to {max_chars} chars...")
                         truncated_content = content[:max_chars] + "..."
                         rephrased = rephrase_article(llm, truncated_content)
+                        if rephrased:
+                            body_snippet = truncated_content[:1500]
+                            rephrased_title = generate_rephrased_title(llm, title, body_snippet)
+                            is_valid, reject_reason = validate_rephrased_title(rephrased_title, title, content)
+                            if not is_valid:
+                                logging.warning(f"[Validation Failed] Article ID {article_id} title rejected: {reject_reason}. Generated: '{rephrased_title}'")
+                                rephrased_title = None
                     else:
                         raise inner_e
                 else:
@@ -203,9 +324,9 @@ def main():
             
             cursor.execute("""
                 UPDATE articles 
-                SET rephrased_article = ?, status = 'rephrased' 
+                SET rephrased_article = ?, rephrased_title = ?, status = 'rephrased' 
                 WHERE id = ?
-            """, (compressed_rephrased, article_id))
+            """, (compressed_rephrased, rephrased_title, article_id))
             conn.commit()
             
             processed_count += 1
