@@ -50,6 +50,11 @@ def get_db_connection():
     db_url = os.environ.get('SATYA_DB_URL')
     db_token = os.environ.get('SATYA_DB_TOKEN')
     
+    if db_url:
+        db_url = db_url.strip()
+    if db_token:
+        db_token = db_token.strip()
+        
     if db_url and (db_url.startswith('libsql://') or db_url.startswith('https://')):
         try:
             import libsql
