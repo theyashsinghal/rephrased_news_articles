@@ -203,7 +203,7 @@ def main():
             
             cursor.execute("""
                 UPDATE articles 
-                SET rephrased_article = ?, rephrased_title = NULL, status = 'rephrased' 
+                SET rephrased_article = ?, status = 'rephrased' 
                 WHERE id = ?
             """, (compressed_rephrased, article_id))
             conn.commit()
