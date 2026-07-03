@@ -11,7 +11,7 @@ from datetime import datetime
 # ==============================================================================
 # Upgraded to Gemma 2 2B IT (Q6_K_L Quantization)
 MODEL_PATH = "./models/gemma-2-2b-it-Q6_K_L.gguf"
-MAX_ARTICLES_TO_PROCESS = 100
+MAX_ARTICLES_TO_PROCESS = 50
 MAX_RUNTIME_SECONDS = 5 * 3600
 
 logging.basicConfig(
