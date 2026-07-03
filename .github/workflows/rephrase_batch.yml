@@ -83,7 +83,7 @@ jobs:
           URL = os.environ['SATYA_DB_URL']
           TOK = os.environ['SATYA_DB_TOKEN']
           host = URL.replace('libsql://', 'https://').rstrip('/')
-          stmt = {'sql': "SELECT id FROM articles WHERE status = 'scraped' LIMIT 1"}
+          stmt = {'sql': 'SELECT id FROM articles WHERE status = \'scraped\' LIMIT 1'}
           body = {'requests':[{'type':'execute','stmt':stmt},{'type':'close'}]}
           req = urllib.request.Request(host+'/v2/pipeline', data=json.dumps(body).encode(),
                   headers={'Authorization':f'Bearer {TOK}','Content-Type':'application/json'})
