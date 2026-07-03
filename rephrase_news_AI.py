@@ -53,7 +53,9 @@ def get_db_connection():
     if db_url and (db_url.startswith('libsql://') or db_url.startswith('https://')):
         try:
             import libsql
-            return libsql.connect(database=db_url, auth_token=db_token)
+            # Replace libsql:// with https:// to prevent InvalidUriChar error in libsql Rust wrapper
+            normalized_url = db_url.replace("libsql://", "https://")
+            return libsql.connect(database=normalized_url, auth_token=db_token)
         except ImportError:
             logging.error("libsql package not installed. Falling back to local sqlite3.")
             
