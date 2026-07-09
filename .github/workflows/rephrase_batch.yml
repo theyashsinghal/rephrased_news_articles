@@ -4,14 +4,41 @@ on:
   repository_dispatch:
     types: [trigger-rephraser] # Listens for the Scraper's trigger signal
   workflow_dispatch:          # Manual trigger
+    inputs:
+      shard:
+        description: 'Shard ID to process (all, or 0-19)'
+        required: false
+        default: 'all'
 
 concurrency:
-  group: news-rephraser
+  group: news-rephraser-${{ github.event.inputs.shard || github.event.client_payload.shard || 'all' }}
   cancel-in-progress: false
 
 jobs:
-  process_articles:
+  setup:
     runs-on: ubuntu-latest
+    outputs:
+      shards: ${{ steps.set-shards.outputs.shards }}
+    steps:
+      - id: set-shards
+        run: |
+          INPUT_SHARD="${{ github.event.inputs.shard }}"
+          if [ -z "$INPUT_SHARD" ]; then
+            INPUT_SHARD="${{ github.event.client_payload.shard }}"
+          fi
+          if [ -z "$INPUT_SHARD" ] || [ "$INPUT_SHARD" = "all" ]; then
+            echo "shards=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]" >> $GITHUB_OUTPUT
+          else
+            echo "shards=[$INPUT_SHARD]" >> $GITHUB_OUTPUT
+          fi
+
+  process_articles:
+    needs: setup
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJson(needs.setup.outputs.shards) }}
     permissions:
       actions: write
 
@@ -61,14 +88,16 @@ jobs:
           GCP_SERVICE_ACCOUNT_JSON: ${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}
           SATYA_DB_URL: ${{ secrets.SATYA_DB_URL }}
           SATYA_DB_TOKEN: ${{ secrets.SATYA_DB_TOKEN }}
+          SHARD_ID: ${{ matrix.shard }}
+          NUM_SHARDS: 20
         run: |
-          python rephrase_news_AI.py
+          python rephrase_news_AI.py --shard $SHARD_ID --num-shards $NUM_SHARDS
 
       - name: Trigger Classifier Workflow
         uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.TRIGGER_CLASSIFIER_TOKEN }}
-          repository: raam-07/SATYA-NEWS-CLASSIFIER # <--- Replace with classifier account/repo path (e.g., theyashsinghal/classifier)
+          repository: raam-07/SATYA-NEWS-CLASSIFIER
           event-type: trigger-classifier
           client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
 
@@ -77,13 +106,15 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SATYA_DB_URL: ${{ secrets.SATYA_DB_URL }}
           SATYA_DB_TOKEN: ${{ secrets.SATYA_DB_TOKEN }}
+          SHARD_ID: ${{ matrix.shard }}
         run: |
           REMAINING=$(python -c "
           import os, urllib.request, json
           URL = os.environ['SATYA_DB_URL']
           TOK = os.environ['SATYA_DB_TOKEN']
+          shard = int(os.environ['SHARD_ID'])
           host = URL.replace('libsql://', 'https://').rstrip('/')
-          stmt = {'sql': 'SELECT id FROM articles WHERE status = \'scraped\' LIMIT 1'}
+          stmt = {'sql': 'SELECT id FROM articles WHERE status = \'scraped\' AND (id % 20) = ? LIMIT 1', 'args': [shard]}
           body = {'requests':[{'type':'execute','stmt':stmt},{'type':'close'}]}
           req = urllib.request.Request(host+'/v2/pipeline', data=json.dumps(body).encode(),
                   headers={'Authorization':f'Bearer {TOK}','Content-Type':'application/json'})
@@ -92,15 +123,14 @@ jobs:
           rows = res['results'][0]['response']['result']['rows']
           print(len(rows))
           ")
-          echo "Remaining scraped articles: $REMAINING"
+          echo "Remaining scraped articles for shard $SHARD_ID: $REMAINING"
           if [ "$REMAINING" -gt 0 ]; then
-            echo "More scraped articles remain. Triggering next Rephraser run..."
+            echo "More scraped articles remain for shard $SHARD_ID. Triggering next run..."
             curl -X POST \
               -H "Authorization: token $GITHUB_TOKEN" \
               -H "Accept: application/vnd.github.v3+json" \
               https://api.github.com/repos/${{ github.repository }}/actions/workflows/rephrase_batch.yml/dispatches \
-              -d '{"ref":"${{ github.ref_name }}"}'
+              -d "{\"ref\":\"${{ github.ref_name }}\", \"inputs\": {\"shard\": \"$SHARD_ID\"}}"
           else
-            echo "All scraped articles rephrased."
+            echo "All scraped articles for shard $SHARD_ID rephrased."
           fi
-
