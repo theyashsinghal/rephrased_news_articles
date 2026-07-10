@@ -114,7 +114,7 @@ jobs:
           TOK = os.environ['SATYA_DB_TOKEN']
           shard = int(os.environ['SHARD_ID'])
           host = URL.replace('libsql://', 'https://').rstrip('/')
-          stmt = {'sql': 'SELECT id FROM articles WHERE status = \'scraped\' AND (id % 20) = ? LIMIT 1', 'args': [shard]}
+          stmt = {'sql': f'SELECT id FROM articles WHERE status = \'scraped\' AND (id % 20) = {shard} LIMIT 1'}
           body = {'requests':[{'type':'execute','stmt':stmt},{'type':'close'}]}
           req = urllib.request.Request(host+'/v2/pipeline', data=json.dumps(body).encode(),
                   headers={'Authorization':f'Bearer {TOK}','Content-Type':'application/json'})
