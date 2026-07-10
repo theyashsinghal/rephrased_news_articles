@@ -97,18 +97,18 @@ def load_llm():
 
 def rephrase_article(llm, content):
     prompt = f"""<|im_start|>system
-You are a professional editor. Rewrite the news article as a concise news summary.<|im_end|>
+You are a news editor who writes concise, factual summaries. You follow formatting rules exactly.<|im_end|>
 <|im_start|>user
-Rewrite the news article below as a concise news summary.
+Summarize the article below as a single paragraph of 50–60 words.
 
-Rules:
-1. In ONLY 50 to 60 words.
-2. One paragraph only.
-3. No headline or title.
-4. Bold (**...**) important people or organizations on first mention.
-5. Do NOT add information that is not present in the article.
-6. Clear, factual, journalistic tone.
-7. Always end with a complete sentence. NEVER stop mid-sentence.
+The summary must capture ALL key facts of the article: who, what, when, where, why, and the outcome or impact. Do not skip any important detail, number, or development mentioned in the article. Prefer dropping minor background details over dropping core facts.
+
+Requirements:
+- Plain paragraph only: no headline, no title, no bullet points, no preamble like "Here is a summary".
+- Bold key people and organizations with **double asterisks** on first mention only.
+- Use only facts stated in the article. Do not infer, speculate, or add outside context.
+- Neutral, journalistic tone.
+- Finish with a complete sentence.
 
 Article:
 {content}<|im_end|>
