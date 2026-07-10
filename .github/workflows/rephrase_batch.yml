@@ -101,6 +101,14 @@ jobs:
           event-type: trigger-classifier
           client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
 
+      - name: Trigger Headline Service Workflow
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.TRIGGER_CLASSIFIER_TOKEN }}
+          repository: raam-07/satya-headline-service
+          event-type: trigger-headlines
+          client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
+
       - name: Trigger next Rephraser run if remaining
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
