@@ -56,9 +56,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ./models
-          key: ${{ runner.os }}-gemma-2-2b-q6-v3 # Aligned to the Gemma 2 filename
+          key: ${{ runner.os }}-qwen-2-5-14b-q5-v1
           restore-keys: |
-            ${{ runner.os }}-gemma-2-2b-
+            ${{ runner.os }}-qwen-2-5-14b-
 
       - name: Install dependencies
         run: |
@@ -73,14 +73,14 @@ jobs:
             pip install gspread oauth2client
           fi
 
-      - name: Download Gemma Model
+      - name: Download Qwen Model
         run: |
           mkdir -p models
-          if [ ! -f "./models/gemma-2-2b-it-Q6_K_L.gguf" ]; then
-            echo "Downloading Gemma 2 2B model from HuggingFace..."
-            huggingface-cli download bartowski/gemma-2-2b-it-GGUF gemma-2-2b-it-Q6_K_L.gguf --local-dir ./models --local-dir-use-symlinks False
+          if [ ! -f "./models/Qwen2.5-14B-Instruct-Q5_K_M.gguf" ]; then
+            echo "Downloading Qwen 2.5 14B model from HuggingFace..."
+            huggingface-cli download bartowski/Qwen2.5-14B-Instruct-GGUF Qwen2.5-14B-Instruct-Q5_K_M.gguf --local-dir ./models --local-dir-use-symlinks False
           else
-            echo "Gemma 2 2B model loaded from cache."
+            echo "Qwen 2.5 14B model loaded from cache."
           fi
 
       - name: Run Rephraser Pipeline

@@ -17,7 +17,7 @@ args, unknown = parser.parse_known_args()
 # --- CONFIGURATION ---
 # ==============================================================================
 # Upgraded to Gemma 2 2B IT (Q6_K_L Quantization)
-MODEL_PATH = "./models/gemma-2-2b-it-Q6_K_L.gguf"
+MODEL_PATH = "./models/Qwen2.5-14B-Instruct-Q5_K_M.gguf"
 MAX_ARTICLES_TO_PROCESS = 50
 MAX_RUNTIME_SECONDS = 5 * 3600
 
@@ -81,7 +81,7 @@ def get_db_connection():
 # ==============================================================================
 def load_llm():
     from llama_cpp import Llama
-    logging.info(f"Loading Gemma 2 2B model from {MODEL_PATH}...")
+    logging.info(f"Loading Qwen model from {MODEL_PATH}...")
     if not os.path.exists(MODEL_PATH):
         raise FileNotFoundError(f"Model file not found at {MODEL_PATH}")
         
@@ -96,7 +96,9 @@ def load_llm():
     return llm
 
 def rephrase_article(llm, content):
-    prompt = f"""<start_of_turn>user
+    prompt = f"""<|im_start|>system
+You are a professional editor. Rewrite the news article as a concise news summary.<|im_end|>
+<|im_start|>user
 Rewrite the news article below as a concise news summary.
 
 Rules:
@@ -109,16 +111,15 @@ Rules:
 7. Always end with a complete sentence. NEVER stop mid-sentence.
 
 Article:
-{content}
-<end_of_turn>
-<start_of_turn>model
+{content}<|im_end|>
+<|im_start|>assistant
 """
     
     response = llm(
         prompt,
         max_tokens=200, 
         top_p=0.9,
-        stop=["<end_of_turn>", "Article:"], 
+        stop=["<|im_end|>", "Article:", "<|im_start|>"], 
         temperature=0.25,
         repeat_penalty=1.1,
         echo=False
