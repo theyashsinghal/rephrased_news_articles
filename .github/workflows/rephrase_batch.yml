@@ -110,8 +110,8 @@ jobs:
         run: |
           REMAINING=$(python -c "
           import os, urllib.request, json
-          URL = os.environ['SATYA_DB_URL']
-          TOK = os.environ['SATYA_DB_TOKEN']
+          URL = os.environ['SATYA_DB_URL'].strip()
+          TOK = os.environ['SATYA_DB_TOKEN'].strip()
           shard = int(os.environ['SHARD_ID'])
           host = URL.replace('libsql://', 'https://').rstrip('/')
           stmt = {'sql': f'SELECT id FROM articles WHERE status = \'scraped\' AND (id % 20) = {shard} LIMIT 1'}
