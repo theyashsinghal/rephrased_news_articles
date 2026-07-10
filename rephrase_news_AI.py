@@ -145,18 +145,13 @@ def main():
     start_time = time.time()
     logging.info("--- Starting News Rephrasing Pipeline ---")
     
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-    except Exception as e:
-        logging.critical(f"Failed to connect to database: {e}")
-        return
-        
     shard = args.shard if args.shard is not None else (int(os.environ.get('SHARD_ID')) if os.environ.get('SHARD_ID') is not None else None)
     num_shards = args.num_shards if args.num_shards != 1 else (int(os.environ.get('NUM_SHARDS')) if os.environ.get('NUM_SHARDS') is not None else 1)
 
     logging.info("Fetching un-rephrased articles from database...")
     try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
         if shard is not None and num_shards > 1:
             logging.info(f"Running in shard mode: shard {shard} of {num_shards}")
             cursor.execute(
@@ -169,9 +164,9 @@ def main():
                 (MAX_ARTICLES_TO_PROCESS,)
             )
         rows = cursor.fetchall()
+        conn.close()
     except Exception as e:
         logging.critical(f"Failed to query articles: {e}")
-        conn.close()
         return
         
     logging.info(f"Evaluating {len(rows)} articles for rephrasing...")
@@ -197,8 +192,11 @@ def main():
         if len(content.split()) < 20:
             logging.warning(f"Skipping {title} - content too short.")
             try:
+                conn = get_db_connection()
+                cursor = conn.cursor()
                 cursor.execute("UPDATE articles SET status = 'skipped_short' WHERE id = ?", (article_id,))
                 conn.commit()
+                conn.close()
             except Exception as e_upd:
                 logging.error(f"Failed to update skipped status: {e_upd}")
             continue
@@ -230,12 +228,15 @@ def main():
                 
             compressed_rephrased = zlib.compress(rephrased.encode('utf-8'))
             
+            conn = get_db_connection()
+            cursor = conn.cursor()
             cursor.execute("""
                 UPDATE articles 
                 SET rephrased_article = ?, status = 'rephrased' 
                 WHERE id = ?
             """, (compressed_rephrased, article_id))
             conn.commit()
+            conn.close()
             
             processed_count += 1
             logging.info(f"Successfully saved rephrased article {article_id}. (Total this run: {processed_count})")
@@ -245,7 +246,6 @@ def main():
         except Exception as e:
             logging.error(f"Failed to process article {article_id}: {e}")
             
-    conn.close()
     logging.info(f"--- Pipeline Finished. Processed {processed_count} new articles. ---")
 
 if __name__ == '__main__':
