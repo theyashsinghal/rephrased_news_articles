@@ -191,14 +191,27 @@ def main():
             
         if len(content.split()) < 20:
             logging.warning(f"Skipping {title} - content too short.")
-            try:
-                conn = get_db_connection()
-                cursor = conn.cursor()
-                cursor.execute("UPDATE articles SET status = 'skipped_short' WHERE id = ?", (article_id,))
-                conn.commit()
-                conn.close()
-            except Exception as e_upd:
-                logging.error(f"Failed to update skipped status: {e_upd}")
+            max_db_retries = 3
+            for db_attempt in range(max_db_retries):
+                try:
+                    conn = get_db_connection()
+                    cursor = conn.cursor()
+                    cursor.execute("UPDATE articles SET status = 'skipped_short' WHERE id = ?", (article_id,))
+                    conn.commit()
+                    conn.close()
+                    break
+                except Exception as e_upd:
+                    err_msg = str(e_upd).lower()
+                    if "stream not found" in err_msg or "404" in err_msg or "connection" in err_msg:
+                        logging.warning(f"Failed to update skipped status due to timeout (attempt {db_attempt + 1}/{max_db_retries}): {e_upd}. Retrying in 2s...")
+                        try:
+                            conn.close()
+                        except Exception:
+                            pass
+                        time.sleep(2.0)
+                    else:
+                        logging.error(f"Failed to update skipped status: {e_upd}")
+                        break
             continue
         logging.info(f"Processing: {title}")
         
@@ -228,15 +241,30 @@ def main():
                 
             compressed_rephrased = zlib.compress(rephrased.encode('utf-8'))
             
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute("""
-                UPDATE articles 
-                SET rephrased_article = ?, status = 'rephrased' 
-                WHERE id = ?
-            """, (compressed_rephrased, article_id))
-            conn.commit()
-            conn.close()
+            max_db_retries = 3
+            for db_attempt in range(max_db_retries):
+                try:
+                    conn = get_db_connection()
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        UPDATE articles 
+                        SET rephrased_article = ?, status = 'rephrased' 
+                        WHERE id = ?
+                    """, (compressed_rephrased, article_id))
+                    conn.commit()
+                    conn.close()
+                    break
+                except Exception as db_e:
+                    err_msg = str(db_e).lower()
+                    if "stream not found" in err_msg or "404" in err_msg or "connection" in err_msg:
+                        logging.warning(f"Database write failed due to connection/stream timeout (attempt {db_attempt + 1}/{max_db_retries}): {db_e}. Retrying with fresh connection in 2s...")
+                        try:
+                            conn.close()
+                        except Exception:
+                            pass
+                        time.sleep(2.0)
+                    else:
+                        raise db_e
             
             processed_count += 1
             logging.info(f"Successfully saved rephrased article {article_id}. (Total this run: {processed_count})")
