@@ -226,13 +226,26 @@ def main():
             except Exception as inner_e:
                 err_msg = str(inner_e).lower()
                 if "context window" in err_msg or "token" in err_msg or "exceed" in err_msg:
-                    max_chars = 12000
-                    if len(content) > max_chars:
-                        logging.info(f"Article {article_id} exceeded context window. Retrying with smart truncation to {max_chars} chars...")
-                        truncated_content = content[:max_chars] + "..."
+                    success = False
+                    current_limit = len(content) - 2000
+                    while current_limit > 500:
+                        logging.info(f"Article {article_id} exceeded context window. Retrying with truncation to {current_limit} chars...")
+                        try:
+                            truncated_content = content[:current_limit] + "..."
+                            rephrased = rephrase_article(llm, truncated_content)
+                            success = True
+                            break
+                        except Exception as loop_e:
+                            err_msg_loop = str(loop_e).lower()
+                            if "context window" in err_msg_loop or "token" in err_msg_loop or "exceed" in err_msg_loop:
+                                current_limit -= 2000
+                            else:
+                                raise loop_e
+                    
+                    if not success:
+                        logging.info(f"Article {article_id} still exceeded context window. Final attempt with strict 500 chars limit...")
+                        truncated_content = content[:500] + "..."
                         rephrased = rephrase_article(llm, truncated_content)
-                    else:
-                        raise inner_e
                 else:
                     raise inner_e
             
