@@ -93,14 +93,6 @@ jobs:
         run: |
           python rephrase_news_AI.py --shard $SHARD_ID --num-shards $NUM_SHARDS
 
-      - name: Trigger Classifier Workflow
-        uses: peter-evans/repository-dispatch@v3
-        with:
-          token: ${{ secrets.TRIGGER_CLASSIFIER_TOKEN }}
-          repository: raam-07/SATYA-NEWS-CLASSIFIER
-          event-type: trigger-classifier
-          client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
-
       - name: Trigger Headline Service Workflow
         uses: peter-evans/repository-dispatch@v3
         with:
