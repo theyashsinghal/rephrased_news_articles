@@ -97,7 +97,7 @@ jobs:
         uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.TRIGGER_CLASSIFIER_TOKEN }}
-          repository: raam-07/satya-headline-service
+          repository: ${{ secrets.HEADLINE_SERVICE_REPO }}
           event-type: trigger-headlines
           client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
 
