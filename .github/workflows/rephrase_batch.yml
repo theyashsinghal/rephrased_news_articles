@@ -1,5 +1,8 @@
 name: Run News AI Rephraser
 
+env:
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: 'true'
+
 on:
   repository_dispatch:
     types: [trigger-rephraser] # Listens for the Scraper's trigger signal
@@ -27,7 +30,7 @@ jobs:
             INPUT_SHARD="${{ github.event.client_payload.shard }}"
           fi
           if [ -z "$INPUT_SHARD" ] || [ "$INPUT_SHARD" = "all" ]; then
-            echo "shards=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]" >> $GITHUB_OUTPUT
+            echo "shards=[0,1,2,3,4,5,6,7,8,9,10]" >> $GITHUB_OUTPUT
           else
             echo "shards=[$INPUT_SHARD]" >> $GITHUB_OUTPUT
           fi
@@ -45,6 +48,19 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Free Disk Space
+        run: |
+          echo "=== Disk space before cleanup ==="
+          df -h
+          for dir in /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost; do
+            if [ -d "$dir" ]; then
+              echo "Deleting $dir..."
+              sudo rm -rf "$dir" || echo "Failed to delete $dir, ignoring."
+            fi
+          done
+          echo "=== Disk space after cleanup ==="
+          df -h
 
       - name: Set up Python 3.10
         uses: actions/setup-python@v5
@@ -89,7 +105,7 @@ jobs:
           SATYA_DB_URL: ${{ secrets.SATYA_DB_URL }}
           SATYA_DB_TOKEN: ${{ secrets.SATYA_DB_TOKEN }}
           SHARD_ID: ${{ matrix.shard }}
-          NUM_SHARDS: 20
+          NUM_SHARDS: 11
         run: |
           python rephrase_news_AI.py --shard $SHARD_ID --num-shards $NUM_SHARDS
 
@@ -114,7 +130,7 @@ jobs:
           TOK = os.environ['SATYA_DB_TOKEN'].strip()
           shard = int(os.environ['SHARD_ID'])
           host = URL.replace('libsql://', 'https://').rstrip('/')
-          stmt = {'sql': f'SELECT id FROM articles WHERE status = \'scraped\' AND (id % 20) = {shard} LIMIT 1'}
+          stmt = {'sql': f'SELECT id FROM articles WHERE status = \'scraped\' AND (id % 11) = {shard} LIMIT 1'}
           body = {'requests':[{'type':'execute','stmt':stmt},{'type':'close'}]}
           req = urllib.request.Request(host+'/v2/pipeline', data=json.dumps(body).encode(),
                   headers={'Authorization':f'Bearer {TOK}','Content-Type':'application/json'})
