@@ -150,3 +150,14 @@ jobs:
           else
             echo "All scraped articles for shard $SHARD_ID rephrased."
           fi
+
+
+  keepalive:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Keepalive Workflow
+        uses: gautamkrishnar/keepalive-workflow@v2
