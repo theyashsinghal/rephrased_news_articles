@@ -16,8 +16,8 @@ args, unknown = parser.parse_known_args()
 # ==============================================================================
 # --- CONFIGURATION ---
 # ==============================================================================
-# Upgraded to Gemma 2 2B IT (Q6_K_L Quantization)
-MODEL_PATH = "./models/Qwen2.5-14B-Instruct-Q5_K_M.gguf"
+# Upgraded to Gemma 4 12B IT (Q4_K_M Quantization)
+MODEL_PATH = "./models/gemma-4-12b-it-Q4_K_M.gguf"
 MAX_ARTICLES_TO_PROCESS = 50
 MAX_RUNTIME_SECONDS = 5 * 3600
 
@@ -81,7 +81,7 @@ def get_db_connection():
 # ==============================================================================
 def load_llm():
     from llama_cpp import Llama
-    logging.info(f"Loading Qwen model from {MODEL_PATH}...")
+    logging.info(f"Loading Gemma 4 12B model from {MODEL_PATH}...")
     if not os.path.exists(MODEL_PATH):
         raise FileNotFoundError(f"Model file not found at {MODEL_PATH}")
         
@@ -95,10 +95,41 @@ def load_llm():
     logging.info("Model loaded successfully.")
     return llm
 
+def clean_rephrased_text(raw_text):
+    if not raw_text:
+        return ""
+    # Strip thought channel if present (Gemma 4 internal reasoning)
+    if "<channel|>" in raw_text:
+        raw_text = raw_text.split("<channel|>")[-1]
+    raw_text = re.sub(r'<\|channel\|?>.*?<channel\|?>', '', raw_text, flags=re.DOTALL).strip()
+    
+    # Strip leading preambles like "Summary:", "Here is the summary:", etc.
+    raw_text = re.sub(r'^(?:Summary|Here is (?:a|the) summary|Paragraph):\s*', '', raw_text, flags=re.IGNORECASE)
+
+    # Join lines into single paragraph
+    lines = [l.strip() for l in raw_text.splitlines() if l.strip()]
+    cleaned = " ".join(lines)
+    
+    # Strip wrapping quotes
+    while (cleaned.startswith('"') and cleaned.endswith('"')) or (cleaned.startswith("'") and cleaned.endswith("'")):
+        cleaned = cleaned[1:-1].strip()
+
+    # Ensure clean full-sentence ending
+    if cleaned and cleaned[-1] not in '.!?"\'':
+        last_sentence_end = max(
+            cleaned.rfind('.'),
+            cleaned.rfind('!'),
+            cleaned.rfind('?')
+        )
+        if last_sentence_end != -1:
+            cleaned = cleaned[:last_sentence_end + 1]
+
+    return cleaned
+
 def rephrase_article(llm, content):
-    prompt = f"""<|im_start|>system
-You are a news editor who writes concise, factual summaries. You follow formatting rules exactly.<|im_end|>
-<|im_start|>user
+    prompt = f"""<|turn>user
+You are a news editor who writes concise, factual summaries. You follow formatting rules exactly.
+
 Summarize the article below as a single paragraph of 50–60 words.
 
 The summary must capture ALL key facts of the article: who, what, when, where, why, and the outcome or impact. Do not skip any important detail, number, or development mentioned in the article. Prefer dropping minor background details over dropping core facts.
@@ -110,34 +141,24 @@ Requirements:
 - Neutral, journalistic tone.
 - Finish with a complete sentence.
 
-Article:
-{content}<|im_end|>
-<|im_start|>assistant
+<article>
+{content}
+</article><turn|>
+<|turn>model
 """
     
     response = llm(
         prompt,
-        max_tokens=200, 
+        max_tokens=220, 
         top_p=0.9,
-        stop=["<|im_end|>", "Article:", "<|im_start|>"], 
+        stop=["<turn|>", "<|turn>", "<eos>"], 
         temperature=0.25,
         repeat_penalty=1.1,
         echo=False
     )
     
-    rephrased_text = response['choices'][0].get('text', '').strip()
-
-    # Ensure clean full-sentence ending
-    if rephrased_text and rephrased_text[-1] not in '.!?"\'':
-        last_sentence_end = max(
-            rephrased_text.rfind('.'),
-            rephrased_text.rfind('!'),
-            rephrased_text.rfind('?')
-        )
-        if last_sentence_end != -1:
-            rephrased_text = rephrased_text[:last_sentence_end + 1]
-
-    return rephrased_text
+    raw_text = response['choices'][0].get('text', '').strip()
+    return clean_rephrased_text(raw_text)
 
 # ==============================================================================
 # --- MAIN PIPELINE ---

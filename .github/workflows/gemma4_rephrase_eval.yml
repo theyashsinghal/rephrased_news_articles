@@ -1,0 +1,86 @@
+name: Tuned Gemma 4 12B Rephraser Benchmark (60 Articles, 15 Runners)
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: gemma4-rephrase-eval-60
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    name: gemma4-rephrase-shard-${{ matrix.shard }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Free Disk Space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo docker image prune -a -f || true
+          df -h
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake
+
+      - name: Install Python Dependencies
+        run: |
+          pip install --upgrade pip
+          pip install huggingface_hub
+          CMAKE_ARGS="-DLLAMA_AVX=OFF -DLLAMA_AVX2=OFF -DLLAMA_FMA=OFF -DLLAMA_F16C=OFF -DGGML_AVX=OFF -DGGML_AVX2=OFF -DGGML_FMA=OFF" pip install llama-cpp-python --no-binary llama-cpp-python --no-cache-dir
+
+      - name: Cache Gemma 4 Model
+        id: cache-model
+        uses: actions/cache@v4
+        with:
+          path: ./models
+          key: gemma-4-12b-q4-v1
+
+      - name: Download Model via HuggingFace
+        if: steps.cache-model.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ./models
+          echo "Downloading gemma-4-12b-it-Q4_K_M.gguf from unsloth/gemma-4-12b-it-GGUF..."
+          python -c "
+          from huggingface_hub import hf_hub_download
+          hf_hub_download(
+            repo_id='unsloth/gemma-4-12b-it-GGUF',
+            filename='gemma-4-12b-it-Q4_K_M.gguf',
+            local_dir='./models',
+            local_dir_use_symlinks=False
+          )
+          "
+          ls -lh ./models/
+
+      - name: Run Sharded Rephraser Benchmark (Shard ${{ matrix.shard }}/15)
+        run: |
+          python eval_gemma4_rephrase.py \
+            --shard ${{ matrix.shard }} \
+            --num-shards 15 \
+            --sample-file eval/sample_60_rephrase.json \
+            --output-file eval_rephrase_results_shard_${{ matrix.shard }}.json
+
+      - name: Upload Shard Results Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gemma4-rephrase-shard-${{ matrix.shard }}
+          path: eval_rephrase_results_shard_${{ matrix.shard }}.json
+          retention-days: 7
