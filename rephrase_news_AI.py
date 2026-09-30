@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import time
 import logging
@@ -98,23 +99,27 @@ def load_llm():
 def clean_rephrased_text(raw_text):
     if not raw_text:
         return ""
-    # Strip thought channel if present (Gemma 4 internal reasoning)
+    # 1. Strip thought channel if present (Gemma 4 internal reasoning)
     if "<channel|>" in raw_text:
         raw_text = raw_text.split("<channel|>")[-1]
+    raw_text = re.sub(r'<\|channel\|?>thought.*?(?:<channel\|?>|<\|channel\|?>)', '', raw_text, flags=re.DOTALL).strip()
     raw_text = re.sub(r'<\|channel\|?>.*?<channel\|?>', '', raw_text, flags=re.DOTALL).strip()
     
-    # Strip leading preambles like "Summary:", "Here is the summary:", etc.
-    raw_text = re.sub(r'^(?:Summary|Here is (?:a|the) summary|Paragraph):\s*', '', raw_text, flags=re.IGNORECASE)
+    # 2. Strip leftover control tokens
+    raw_text = re.sub(r'<\|?(?:start_of_turn|end_of_turn|eos|bos|pad|turn|channel|thought)[^>]*\|?>', '', raw_text).strip()
 
-    # Join lines into single paragraph
+    # 3. Strip leading preambles like "Summary:", "Here is the summary:", etc.
+    raw_text = re.sub(r'^(?:Summary|Here is (?:a|the) summary|Paragraph):\s*', '', raw_text, flags=re.IGNORECASE).strip()
+
+    # 4. Join lines into single paragraph
     lines = [l.strip() for l in raw_text.splitlines() if l.strip()]
-    cleaned = " ".join(lines)
+    cleaned = " ".join(lines).strip()
     
-    # Strip wrapping quotes
+    # 5. Strip wrapping quotes
     while (cleaned.startswith('"') and cleaned.endswith('"')) or (cleaned.startswith("'") and cleaned.endswith("'")):
         cleaned = cleaned[1:-1].strip()
 
-    # Ensure clean full-sentence ending
+    # 6. Ensure clean full-sentence ending
     if cleaned and cleaned[-1] not in '.!?"\'':
         last_sentence_end = max(
             cleaned.rfind('.'),
@@ -124,7 +129,7 @@ def clean_rephrased_text(raw_text):
         if last_sentence_end != -1:
             cleaned = cleaned[:last_sentence_end + 1]
 
-    return cleaned
+    return cleaned.strip()
 
 def rephrase_article(llm, content):
     prompt = f"""<|turn>user
@@ -153,7 +158,7 @@ Output only the paragraph.<turn|>
     
     response = llm(
         prompt,
-        max_tokens=260, 
+        max_tokens=350, 
         top_p=0.9,
         stop=["<turn|>", "<|turn>", "<eos>"], 
         temperature=0.25,
@@ -314,6 +319,14 @@ def main():
             logging.error(f"Failed to process article {article_id}: {e}")
             
     logging.info(f"--- Pipeline Finished. Processed {processed_count} new articles. ---")
+    
+    if "GITHUB_OUTPUT" in os.environ:
+        try:
+            with open(os.environ["GITHUB_OUTPUT"], "a") as gh_out:
+                gh_out.write(f"processed_count={processed_count}\n")
+        except Exception as e_gh:
+            logging.warning(f"Could not write to GITHUB_OUTPUT: {e_gh}")
 
 if __name__ == '__main__':
     main()
+

@@ -108,6 +108,7 @@ jobs:
           fi
 
       - name: Run Rephraser Pipeline
+        id: rephrase
         env:
           GCP_SERVICE_ACCOUNT_JSON: ${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}
           SATYA_DB_URL: ${{ secrets.SATYA_DB_URL }}
@@ -118,6 +119,7 @@ jobs:
           python rephrase_news_AI.py --shard $SHARD_ID --num-shards $NUM_SHARDS
 
       - name: Trigger Headline Service Workflow
+        if: steps.rephrase.outputs.processed_count != '0'
         uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.TRIGGER_CLASSIFIER_TOKEN }}
@@ -126,6 +128,7 @@ jobs:
           client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
 
       - name: Trigger next Rephraser run if remaining
+        if: steps.rephrase.outputs.processed_count != '0'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SATYA_DB_URL: ${{ secrets.SATYA_DB_URL }}
