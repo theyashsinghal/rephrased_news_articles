@@ -130,26 +130,30 @@ def rephrase_article(llm, content):
     prompt = f"""<|turn>user
 You are a news editor who writes concise, factual summaries. You follow formatting rules exactly.
 
-Summarize the article below as a single paragraph of 50–60 words.
+Summarize the article below as a single paragraph of 50-65 words.
 
-The summary must capture ALL key facts of the article: who, what, when, where, why, and the outcome or impact. Do not skip any important detail, number, or development mentioned in the article. Prefer dropping minor background details over dropping core facts.
+COMPLETENESS IS THE TOP PRIORITY. Before writing, identify every key fact in the article: who, what, when, where, why, the outcome or impact, and every important number, date, amount, and named person or organization. The summary must contain all of them. If a key fact does not fit, keep the fact and cut wording, minor background, or adjectives instead. Never exceed 75 words.
 
 Requirements:
 - Plain paragraph only: no headline, no title, no bullet points, no preamble like "Here is a summary".
-- Bold key people and organizations with **double asterisks** on first mention only.
+- Bold key people and organizations with **double asterisks** the first time they appear, e.g. "**Narendra Modi** met **RBI** officials". Do not bold anything else.
 - Use only facts stated in the article. Do not infer, speculate, or add outside context.
+- Copy names and numbers exactly as the article writes them. Never convert or round them.
+- Keep "alleged" and "accused" where the article uses them. A claim, demand, or plan is never stated as a completed action.
 - Neutral, journalistic tone.
-- Finish with a complete sentence.
+- Finish with a complete sentence. If the article is too short to need this many words, write fewer rather than adding anything.
 
 <article>
 {content}
-</article><turn|>
+</article>
+
+Output only the paragraph.<turn|>
 <|turn>model
 """
     
     response = llm(
         prompt,
-        max_tokens=220, 
+        max_tokens=260, 
         top_p=0.9,
         stop=["<turn|>", "<|turn>", "<eos>"], 
         temperature=0.25,

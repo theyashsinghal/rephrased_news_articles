@@ -68,13 +68,12 @@ jobs:
           python-version: '3.10'
           cache: 'pip'
 
-      - name: Cache HuggingFace Models
+      - name: Cache Gemma 4 Model
+        id: cache-model
         uses: actions/cache@v4
         with:
           path: ./models
-          key: ${{ runner.os }}-qwen-2-5-14b-q5-v1
-          restore-keys: |
-            ${{ runner.os }}-qwen-2-5-14b-
+          key: gemma-4-12b-q4-v1
 
       - name: Install dependencies
         run: |
@@ -89,14 +88,23 @@ jobs:
             pip install gspread oauth2client
           fi
 
-      - name: Download Qwen Model
+      - name: Download Gemma 4 Model
+        if: steps.cache-model.outputs.cache-hit != 'true'
         run: |
           mkdir -p models
-          if [ ! -f "./models/Qwen2.5-14B-Instruct-Q5_K_M.gguf" ]; then
-            echo "Downloading Qwen 2.5 14B model from HuggingFace..."
-            huggingface-cli download bartowski/Qwen2.5-14B-Instruct-GGUF Qwen2.5-14B-Instruct-Q5_K_M.gguf --local-dir ./models --local-dir-use-symlinks False
+          if [ ! -f "./models/gemma-4-12b-it-Q4_K_M.gguf" ]; then
+            echo "Downloading Gemma 4 12B model from HuggingFace..."
+            python -c "
+            from huggingface_hub import hf_hub_download
+            hf_hub_download(
+              repo_id='unsloth/gemma-4-12b-it-GGUF',
+              filename='gemma-4-12b-it-Q4_K_M.gguf',
+              local_dir='./models',
+              local_dir_use_symlinks=False
+            )
+            "
           else
-            echo "Qwen 2.5 14B model loaded from cache."
+            echo "Gemma 4 12B model loaded from cache."
           fi
 
       - name: Run Rephraser Pipeline
